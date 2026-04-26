@@ -1,0 +1,412 @@
+<!-- Dashboard View -->
+<section id="view-dashboard" class="view-section is-hidden">
+  <div class="is-flex is-justify-content-space-between is-align-items-center mb-4">
+    <h1 class="title mb-0">Dashboard</h1>
+    <div class="field is-grouped">
+      <div class="control">
+        <div class="select is-small">
+          <select id="dash-filter-cycle" onchange="applyDashboardFilters()">
+            <option value="Apr-May">Apr-May</option>
+            <option value="Jun-Jul">Jun-Jul</option>
+            <option value="Aug-Sep">Aug-Sep</option>
+            <option value="Oct-Nov">Oct-Nov</option>
+            <option value="Dec-Jan">Dec-Jan</option>
+            <option value="Feb-Mar">Feb-Mar</option>
+          </select>
+        </div>
+      </div>
+      <div class="control">
+        <div class="select is-small">
+          <select id="dash-filter-year" onchange="applyDashboardFilters()">
+            <!-- Populated via JS -->
+          </select>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="columns is-multiline">
+    <div class="column is-3">
+      <div class="box has-background-primary has-text-white">
+        <p class="heading">Total Income</p>
+        <p class="title has-text-white" id="dash-income">₹ 0</p>
+      </div>
+    </div>
+    <div class="column is-3">
+      <div class="box has-background-danger has-text-white">
+        <p class="heading">Total Expense</p>
+        <p class="title has-text-white" id="dash-expense">₹ 0</p>
+      </div>
+    </div>
+    <div class="column is-3">
+      <div class="box has-background-info has-text-white">
+        <p class="heading">Balance</p>
+        <p class="title has-text-white" id="dash-balance">₹ 0</p>
+      </div>
+    </div>
+    <div class="column is-3">
+      <div class="box has-background-warning has-text-dark">
+        <p class="heading">Collections (Paid / Total)</p>
+        <p class="title has-text-dark" id="dash-collections">0 / 0</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="columns">
+    <div class="column is-6">
+      <div class="box">
+        <h2 class="subtitle">Category-wise Summary</h2>
+        <canvas id="dash-chart"></canvas>
+      </div>
+    </div>
+    <div class="column is-6">
+      <div class="box">
+        <h2 class="subtitle">Budget vs Expense</h2>
+        <table class="table is-fullwidth is-striped">
+          <thead>
+            <tr>
+              <th>Category</th>
+              <th>Budget</th>
+              <th>Expense</th>
+              <th>Variance</th>
+            </tr>
+          </thead>
+          <tbody id="dash-budget-table">
+            <tr>
+              <td colspan="4">Loading...</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Income View -->
+<section id="view-income" class="view-section is-hidden">
+  <h1 class="title">Record Income</h1>
+  <div class="box">
+    <form id="form-income">
+      <div class="table-container">
+        <table class="table is-fullwidth" id="income-table">
+          <thead>
+            <tr>
+              <th>Date</th>
+              <th>Category</th>
+              <th>SubCategory</th>
+              <th>Villa No.</th>
+              <th>Amount</th>
+              <th>Payment Type</th>
+              <th>Notes</th>
+              <th>Generate Bill</th>
+              <th>Action</th>
+            </tr>
+          </thead>
+          <tbody>
+            <!-- Dynamic rows will be added here -->
+          </tbody>
+        </table>
+      </div>
+      <button type="button" class="button is-small is-info is-light" onclick="addIncomeRow()">+ Add Row</button>
+      <hr>
+      <button type="submit" class="button is-primary" id="btn-submit-income">Submit Entries</button>
+    </form>
+  </div>
+</section>
+
+<!-- Expense View -->
+<section id="view-expense" class="view-section is-hidden">
+  <h1 class="title">Record Expense</h1>
+  <div class="box">
+    <form id="form-expense">
+      <div class="table-container">
+        <table class="table is-fullwidth" id="expense-table">
+          <thead>
+            <tr>
+              <th>Date</th>
+              <th>Amount</th>
+              <th>Category</th>
+              <th>SubCategory</th>
+              <th>Expense Nature</th>
+              <th>Payment Type</th>
+              <th>Email</th>
+              <th>Notes</th>
+              <th>Attachment</th>
+              <th>Asset Details (if Asset)</th>
+              <th>Action</th>
+            </tr>
+          </thead>
+          <tbody>
+            <!-- Dynamic rows will be added here -->
+          </tbody>
+        </table>
+      </div>
+      <button type="button" class="button is-small is-info is-light" onclick="addExpenseRow()">+ Add Row</button>
+      <hr>
+      <button type="submit" class="button is-primary" id="btn-submit-expense">Submit Entries</button>
+    </form>
+  </div>
+</section>
+
+<!-- Approvals View -->
+<section id="view-approvals" class="view-section is-hidden">
+  <h1 class="title">Pending Approvals</h1>
+  <div class="box">
+    <table class="table is-fullwidth is-striped">
+      <thead>
+        <tr><th>ID</th><th>Date</th><th>Category</th><th>Amount</th><th>Created By</th><th>Notes</th><th>Actions</th></tr>
+      </thead>
+      <tbody id="approvals-table">
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- Budget View -->
+<section id="view-budget" class="view-section is-hidden">
+  <h1 class="title">Budget Planning</h1>
+  <div class="box">
+    <div class="field is-grouped">
+      <div class="control">
+        <div class="select">
+          <select id="budget-month">
+            <option value="Apr-May">Apr-May</option>
+            <option value="Jun-Jul">Jun-Jul</option>
+            <option value="Aug-Sep">Aug-Sep</option>
+            <option value="Oct-Nov">Oct-Nov</option>
+            <option value="Dec-Jan">Dec-Jan</option>
+            <option value="Feb-Mar">Feb-Mar</option>
+          </select>
+        </div>
+      </div>
+      <div class="control">
+        <div class="select">
+          <select id="budget-year">
+            <!-- Populated via JS -->
+          </select>
+        </div>
+      </div>
+      <div class="control"><button class="button is-info" onclick="loadBudget()">Load</button></div>
+      <div class="control"><button class="button is-primary" onclick="openAddBudgetModal()">+ Create Budget</button></div>
+    </div>
+    <table class="table is-fullwidth" id="budget-table">
+      <thead>
+        <tr>
+          <th>Category</th>
+          <th>SubCategory</th>
+          <th>Amount</th>
+        </tr>
+      </thead>
+      <tbody>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- Reports View -->
+<section id="view-reports" class="view-section is-hidden">
+  <h1 class="title">Reports</h1>
+  <div class="box">
+    <div class="field is-grouped">
+      <div class="control">
+        <div class="select">
+          <select id="report-cycle">
+            <option value="Apr-May">Apr-May</option>
+            <option value="Jun-Jul">Jun-Jul</option>
+            <option value="Aug-Sep">Aug-Sep</option>
+            <option value="Oct-Nov">Oct-Nov</option>
+            <option value="Dec-Jan">Dec-Jan</option>
+            <option value="Feb-Mar">Feb-Mar</option>
+          </select>
+        </div>
+      </div>
+      <div class="control">
+        <div class="select">
+          <select id="report-year"></select>
+        </div>
+      </div>
+      <div class="control">
+        <button class="button is-info" onclick="generateReport()">Filter</button>
+      </div>
+    </div>
+
+    <div class="tabs is-boxed">
+      <ul>
+        <li class="is-active"><a onclick="switchReportTab('summary', this)">Monthly Summary</a></li>
+        <li><a onclick="switchReportTab('category', this)">Category Breakdown</a></li>
+        <li><a onclick="switchReportTab('budget', this)">Budget vs Expense vs Income</a></li>
+      </ul>
+    </div>
+
+    <div id="report-content">
+      <p>Select filter and report type to view data.</p>
+    </div>
+  </div>
+</section>
+
+<!-- Invoices View -->
+<section id="view-invoices" class="view-section is-hidden">
+  <h1 class="title">Invoices & Payments</h1>
+  <div class="box">
+    <button class="button is-primary mb-3" onclick="openCreateInvoiceModal()">+ Create Invoice</button>
+    <table class="table is-fullwidth is-striped">
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th>Villa No.</th>
+          <th>Month/Year</th>
+          <th>Amount</th>
+          <th>Paid</th>
+          <th>Outstanding</th>
+          <th>Status</th>
+          <th>Due Date</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        <!-- loaded dynamically -->
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- Assets View -->
+<section id="view-assets" class="view-section is-hidden">
+  <h1 class="title">Assets</h1>
+  <div class="box">
+    <table class="table is-fullwidth is-striped">
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th>Name</th>
+          <th>Category</th>
+          <th>Serial No</th>
+          <th>Purchase Date</th>
+          <th>Warranty</th>
+          <th>Amount</th>
+          <th>Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        <!-- loaded dynamically -->
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- Setup View -->
+<section id="view-setup" class="view-section is-hidden">
+  <h1 class="title">System Setup</h1>
+
+  <div class="columns">
+    <div class="column is-6">
+      <div class="box">
+        <h2 class="subtitle">Users</h2>
+        <button class="button is-small is-info mb-2" onclick="openAddUserModal()">+ Add User</button>
+        <table class="table is-fullwidth is-narrow is-striped">
+          <thead>
+            <tr>
+              <th>Username</th>
+              <th>Role</th>
+              <th>Action</th>
+            </tr>
+          </thead>
+          <tbody id="setup-users-table"></tbody>
+        </table>
+      </div>
+    </div>
+    <div class="column is-6">
+      <div class="box">
+        <h2 class="subtitle">Categories</h2>
+        <button class="button is-small is-info mb-2" onclick="openAddCategoryModal()">+ Add Category</button>
+        <table class="table is-fullwidth is-narrow is-striped">
+          <thead>
+            <tr>
+              <th>Type</th>
+              <th>Category</th>
+              <th>Subcategory</th>
+              <th>Nature</th>
+              <th>Action</th>
+            </tr>
+          </thead>
+          <tbody id="setup-categories-table"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- Modals Block -->
+<!-- Generic Modal for Setup -->
+<div class="modal" id="modal-setup">
+  <div class="modal-background" onclick="closeModal('modal-setup')"></div>
+  <div class="modal-card">
+    <header class="modal-card-head">
+      <p class="modal-card-title" id="modal-setup-title">Setup</p>
+      <button class="delete" aria-label="close" onclick="closeModal('modal-setup')"></button>
+    </header>
+    <section class="modal-card-body" id="modal-setup-body">
+      <!-- Injected via JS -->
+    </section>
+    <footer class="modal-card-foot">
+      <button class="button is-success" onclick="submitSetup()">Save</button>
+      <button class="button" onclick="closeModal('modal-setup')">Cancel</button>
+    </footer>
+  </div>
+</div>
+
+<!-- Generic Modal for Invoice -->
+<div class="modal" id="modal-invoice">
+  <div class="modal-background" onclick="closeModal('modal-invoice')"></div>
+  <div class="modal-card">
+    <header class="modal-card-head">
+      <p class="modal-card-title">Create Invoice</p>
+      <button class="delete" aria-label="close" onclick="closeModal('modal-invoice')"></button>
+    </header>
+    <section class="modal-card-body">
+      <p>Select Villa to generate and email invoice:</p>
+      <div class="select mt-3"><select id="inv-villa"></select></div>
+    </section>
+    <footer class="modal-card-foot">
+      <button class="button is-success" onclick="submitInvoice()">Generate & Email</button>
+      <button class="button" onclick="closeModal('modal-invoice')">Cancel</button>
+    </footer>
+  </div>
+</div>
+
+<!-- Modal for Budget -->
+<div class="modal" id="modal-budget">
+  <div class="modal-background" onclick="closeModal('modal-budget')"></div>
+  <div class="modal-card">
+    <header class="modal-card-head">
+      <p class="modal-card-title">Create Budget</p>
+      <button class="delete" aria-label="close" onclick="closeModal('modal-budget')"></button>
+    </header>
+    <section class="modal-card-body">
+      <div class="columns">
+        <div class="column is-4">
+          <div class="field"><label class="label">Cycle</label><div class="control"><div class="select">
+            <select id="new-budget-month">
+              <option value="Apr-May">Apr-May</option>
+              <option value="Jun-Jul">Jun-Jul</option>
+              <option value="Aug-Sep">Aug-Sep</option>
+              <option value="Oct-Nov">Oct-Nov</option>
+              <option value="Dec-Jan">Dec-Jan</option>
+              <option value="Feb-Mar">Feb-Mar</option>
+            </select>
+          </div></div></div>
+        </div>
+        <div class="column is-4">
+          <div class="field"><label class="label">Year</label><div class="control"><div class="select"><select id="new-budget-year"></select></div></div></div>
+        </div>
+        <div class="column is-4">
+          <div class="field"><label class="label">Amount</label><div class="control"><input class="input" type="number" id="new-budget-amount" required></div></div>
+        </div>
+      </div>
+      <div class="field"><label class="label">Category</label><div class="control"><div class="select is-fullwidth"><select id="new-budget-cat"></select></div></div></div>
+    </section>
+    <footer class="modal-card-foot">
+      <button id="btn-submit-budget" class="button is-success" onclick="submitBudget()">Save Budget</button>
+      <button class="button" onclick="closeModal('modal-budget')">Cancel</button>
+    </footer>
+  </div>
+</div>

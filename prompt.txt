@@ -1,0 +1,286 @@
+**Project Title:** Community Financial & Property Management Web App (Apps Script + Google Sheets)
+
+---
+
+## 🎯 Objective
+
+Build a **production-ready web application** for managing:
+
+* Community income & expenses
+* Budget planning
+* Invoice & payment tracking
+* Asset tracking
+* Dashboard
+* Reports
+* Approval workflows
+* Admin setup (users, categories, subcategories)
+
+The system must be:
+
+* Single URL (Apps Script `/exec`)
+* UI served via `HtmlService`
+* Backend via Apps Script (`.gs` files)
+* Data stored in Google Sheets
+* Files stored in Google Drive
+
+---
+
+## 🧱 Architecture
+
+### Frontend
+
+* Single Page Application (SPA)
+* Built using:
+
+  * HTML
+  * Vanilla JavaScript
+  * Bulma CSS
+  * Chart.js
+
+### Backend
+
+* Google Apps Script
+* `doGet()` serves:
+
+  * UI (admin.html)
+  * API routes (`?action=...`)
+  * `doPost()` handles:
+
+  * login
+  * transactions
+  * setup actions
+
+### Data Storage (Google Sheets)
+
+Sheets required:
+
+1. Users
+
+   * Username | Password | Role
+
+2. Categories
+
+   * ID | Type | Category | SubCategory | Active | ExpenseNature
+
+3. Transactions
+
+   * ID | Date | Type | CategoryID | SubCategory | Amount | Notes | Status | CreatedBy | ApprovedBy | ExpenseNature	| VillaNo |PaymentType
+
+4. Invoices
+
+   * ID | Email | Month | Year | Amount | Paid | Status | DueDate | LateFee
+
+5. Assets
+
+   * ID | Name | Category | Serial | PurchaseDate | Warranty | Amount | Bills | ...
+
+6. Budget
+
+   * ID | Month | Year | Amount | Category | SubCategory | Active | ExpenseNature
+   
+7. Villas
+
+   * ID | Villa No | Owner Name | Email | Phone | Amount | Active 
+
+8. Files
+
+   * ID | Name | Type | Size | URL | TransactionID |CreatedBy | CreatedDate
+
+
+---
+
+## 🔐 Authentication
+
+* Login via `doPost(action="login")`
+* Validate against Users sheet
+* Store session in frontend (localStorage)
+* UI controls access (no strict backend auth initially)
+
+---
+
+## 🖥️ UI REQUIREMENTS
+
+### Main Menu
+
+* Dashboard
+* Income
+* Expense
+* Reports
+* Setup
+* Logout
+
+---
+
+### 1. Dashboard
+
+Show: filter by month(s) and year
+
+* Total Income
+* Total Expense
+* Balance
+* Budget vs Expense
+* Collections (total / paid / outstanding)
+* Category-wise chart
+* Asset list
+
+---
+
+### 2. Income Screen
+
+* Add income entry - one or more entries, table with add/delete rows
+* Fields:
+
+  * Date
+  * Category
+  * SubCategory
+  * Villa No. (visible only for Maintenance category)
+  * Amount
+  * Payment Type
+  * Notes
+  * checkbox to generate Bills
+
+---
+
+### 3. Expense Screen
+
+* Add expense entry- one or more entries, table with add/delete rows
+* Fields:
+
+  * Date
+  * Amount
+  * Category
+  * SubCategory
+  * ExpenseNature (Asset / Service / Consumable)
+  * Payment Type
+  * Email
+  * Notes
+  * Bills (attach files) - optional, stored in Drive path user defined in setup
+  * Serial No, Purchase Date, Warranty (if Asset) - optional
+
+---
+
+### 4. Reports
+
+* Filter by month(s) and year
+* Monthly summary
+* Category-wise breakdown
+* Budget vs Expense vs income
+* Asset list
+* Invoice & Payments
+* Villa wise collection
+
+---
+
+### 5. Setup Screen
+
+#### Users
+
+* list/Add/edit/delete user (username, password, role)
+
+#### Categories
+
+* list/Add/edit/delete category + subcategory
+* Assign ExpenseNature
+
+---
+
+### 6. Approval Workflow
+
+* Expenses added by user → Pending, by admin → Approved
+* Admin/Approver → Approve/Reject
+
+---
+
+### 7. Asset Management
+
+* If ExpenseNature = Asset:
+
+  * Auto-create asset record
+  * List, modify, delete assets
+
+---
+
+### 8. Invoice & Payments
+
+* Create invoice - from villas sheet.
+* Auto populate Date, Billing Cycle (Apr-May, Jun-Jul etc), villa no, owner name, amount from sheet, outstanding amount (calculate from previous payments)
+* generate pdf of invoice and attach to email
+* Record payment from transactions
+* Track:
+  * Paid
+  * Partial
+  * Outstanding
+* List, edit, delete invoices
+
+---
+
+## 🔌 API DESIGN
+
+### GET (via doGet)
+
+* dashboard
+* categories
+* invoices
+* assets
+* pending
+* ledger
+* invoiceDetails
+* invoicePDF
+
+---
+
+### POST (via doPost)
+
+* login
+* addTransaction
+* updateStatus
+* addCategory
+* addUser
+* createInvoice
+* recordPayment
+
+---
+
+## ⚠️ Critical Rules
+
+1. **UI must be served via Apps Script (not local file)**
+2. `/exec` must be single entry point
+3. No hardcoded data
+4. All dropdowns must load dynamically
+5. All strings (Status, Roles) must use constants
+6. Sheet column positions must be consistent
+
+---
+
+## 🚀 Expected Outcome
+
+A fully working system where:
+
+* Opening `/exec` shows login
+* After login → dashboard loads
+* User can:
+
+  * Add income/expense
+  * Configure categories, subcategories
+  * Manage users
+  * Track payments
+  * Approval of expenses
+  * Manage assets
+  * View reports
+  * Generate invoices and track payments
+  * Manage villas
+  * Manage budget
+  * Manage files
+  * Manage villa wise collection
+  * Any submit action should lock, inprogress, show a success message and refresh the page
+
+
+---
+
+## 🎯 Goal
+
+The system should be:
+
+* Stable, faster
+* Consistent
+* Extendable to SaaS later

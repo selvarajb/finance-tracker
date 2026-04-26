@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <base target="_top">
+    <!-- Include the heavy CSS (Bulma, etc) -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bulma@0.9.4/css/bulma.min.css">
+    <!-- App Custom CSS -->
+    <?!= include('app_css'); ?>
+  </head>
+  <body>
+    <!-- Main App Container -->
+    <div id="app-container">
+      
+      <!-- Login View -->
+      <section id="login-view" class="hero is-fullheight is-light">
+        <div class="hero-body">
+          <div class="container has-text-centered">
+            <div class="column is-4 is-offset-4">
+              <div class="box">
+                <p class="subtitle is-4">Login</p>
+                <form id="login-form">
+                  <div class="field">
+                    <div class="control">
+                      <input class="input" type="text" id="username" placeholder="Username" required autofocus>
+                    </div>
+                  </div>
+                  <div class="field">
+                    <div class="control">
+                      <input class="input" type="password" id="password" placeholder="Password" required>
+                    </div>
+                  </div>
+                  <div class="notification is-danger is-hidden" id="login-error"></div>
+                  <button class="button is-block is-info is-fullwidth" type="submit" id="login-btn">Login</button>
+                </form>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Main Logged-In View (Hidden Initially) -->
+      <div id="main-view" class="is-hidden">
+        <!-- Navbar -->
+        <nav class="navbar is-info" role="navigation" aria-label="main navigation">
+          <div class="navbar-brand">
+            <a class="navbar-item" href="#">
+              <strong>Finance Tracker</strong>
+            </a>
+            <a role="button" class="navbar-burger" aria-label="menu" aria-expanded="false" data-target="navbarBasicExample">
+              <span aria-hidden="true"></span>
+              <span aria-hidden="true"></span>
+              <span aria-hidden="true"></span>
+            </a>
+          </div>
+
+          <div id="navbarBasicExample" class="navbar-menu">
+            <div class="navbar-start">
+              <a class="navbar-item" data-target="dashboard">Dashboard</a>
+              <a class="navbar-item" data-target="income">Income</a>
+              <a class="navbar-item" data-target="expense">Expense</a>
+              <a class="navbar-item" data-target="budget">Budget</a>
+              <a class="navbar-item" data-target="reports">Reports</a>
+              <div class="navbar-item has-dropdown is-hoverable">
+                <a class="navbar-link">More</a>
+                <div class="navbar-dropdown">
+                  <a class="navbar-item" data-target="approvals">Approvals</a>
+                  <a class="navbar-item" data-target="invoices">Invoices & Payments</a>
+                  <a class="navbar-item" data-target="assets">Assets</a>
+                  <hr class="navbar-divider">
+                  <a class="navbar-item" data-target="setup">Setup (Users/Categories)</a>
+                </div>
+              </div>
+            </div>
+
+            <div class="navbar-end">
+              <div class="navbar-item">
+                <div class="buttons">
+                  <span class="mr-3" id="user-greeting">Hello, User</span>
+                  <a class="button is-light" id="logout-btn">Log in/out</a>
+                </div>
+              </div>
+            </div>
+          </div>
+        </nav>
+
+        <!-- Dynamic Views Area -->
+        <div class="container mt-5" id="views-container">
+          
+          <!-- Views included from views.html -->
+          <?!= include('views'); ?>
+
+        </div>
+      </div>
+    </div> <!-- /#app-container -->
+
+    <!-- Load Heavy JS plugins (Chart.js etc) -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Load App JS -->
+    <?!= include('app_js'); ?>
+  </body>
+</html>

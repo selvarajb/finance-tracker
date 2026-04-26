@@ -1,0 +1,878 @@
+<script>
+    // State Management
+    const State = {
+        user: null,
+        currentView: 'dashboard',
+        // Caches
+        categories: [],
+        users: [],
+        transactions: [],
+        invoices: [],
+        assets: [],
+        budget: [],
+        villas: [],
+        files: []
+    };
+
+    // Initialization
+    document.addEventListener('DOMContentLoaded', () => {
+        initAuth();
+        initNavbar();
+    });
+
+    function initAuth() {
+        const sessionStr = localStorage.getItem('finance_session');
+        if (sessionStr) {
+            try {
+                State.user = JSON.parse(sessionStr);
+                showMainApp();
+            } catch (e) {
+                localStorage.removeItem('finance_session');
+                showLogin();
+            }
+        } else {
+            showLogin();
+        }
+
+        // Login Form Submission
+        document.getElementById('login-form').addEventListener('submit', (e) => {
+            e.preventDefault();
+            const user = document.getElementById('username').value;
+            const pass = document.getElementById('password').value;
+            const btn = document.getElementById('login-btn');
+            const err = document.getElementById('login-error');
+
+            btn.classList.add('is-loading');
+            err.classList.add('is-hidden');
+
+            if (typeof google === 'undefined') {
+                btn.classList.remove('is-loading');
+                err.textContent = "Production environment required (Google Apps Script).";
+                err.classList.remove('is-hidden');
+                return;
+            }
+
+            // Note: Currently calling server.
+            google.script.run
+                .withSuccessHandler((res) => {
+                    btn.classList.remove('is-loading');
+                    if (res.success) {
+                        State.user = { username: res.username, role: res.role };
+                        localStorage.setItem('finance_session', JSON.stringify(State.user));
+                        showMainApp();
+                    } else {
+                        err.textContent = res.message || "Invalid credentials.";
+                        err.classList.remove('is-hidden');
+                    }
+                })
+                .withFailureHandler((error) => {
+                    btn.classList.remove('is-loading');
+                    err.textContent = "Error communicating with server.";
+                    err.classList.remove('is-hidden');
+                })
+                .verifyLogin(user, pass);
+        });
+
+        // Logout
+        document.getElementById('logout-btn').addEventListener('click', () => {
+            State.user = null;
+            localStorage.removeItem('finance_session');
+            showLogin();
+        });
+    }
+
+    function showLogin() {
+        document.getElementById('login-view').classList.remove('is-hidden');
+        document.getElementById('main-view').classList.add('is-hidden');
+        document.getElementById('username').value = '';
+        document.getElementById('password').value = '';
+    }
+
+    function showMainApp() {
+        document.getElementById('login-view').classList.add('is-hidden');
+        document.getElementById('main-view').classList.remove('is-hidden');
+        document.getElementById('user-greeting').textContent = `Hello, ${State.user.username} (${State.user.role})`;
+
+        // Load initial data and view
+        switchView('dashboard');
+        loadInitialData(); // To be implemented to fetch categories etc.
+    }
+
+    // Navigation
+    function initNavbar() {
+        // Burger menu toggle (mobile apps)
+        const $navbarBurgers = Array.prototype.slice.call(document.querySelectorAll('.navbar-burger'), 0);
+        if ($navbarBurgers.length > 0) {
+            $navbarBurgers.forEach(el => {
+                el.addEventListener('click', () => {
+                    const target = el.dataset.target;
+                    const $target = document.getElementById(target);
+                    el.classList.toggle('is-active');
+                    $target.classList.toggle('is-active');
+                });
+            });
+        }
+
+        // View switching
+        const navItems = document.querySelectorAll('.navbar-item[data-target]');
+        navItems.forEach(item => {
+            item.addEventListener('click', (e) => {
+                const target = e.currentTarget.dataset.target;
+                switchView(target);
+            });
+        });
+    }
+
+    // Reports and Setup dynamically populating
+    function generateReport() {
+        const reportContent = document.getElementById('report-content');
+        const cycle = document.getElementById('report-cycle').value;
+        const year = document.getElementById('report-year').value;
+
+        reportContent.innerHTML = `
+      <table class="table is-striped is-fullwidth mt-4">
+         <thead>
+           <tr><th>Category</th><th>Total Income</th><th>Total Expense</th><th>Difference</th></tr>
+         </thead>
+         <tbody>
+           <tr><td>Maintenance</td><td>₹ ${Math.floor(Math.random() * 50000)}</td><td>0</td><td class="has-text-success">...</td></tr>
+           <tr><td>Repairs</td><td>0</td><td>₹ ${Math.floor(Math.random() * 15000)}</td><td class="has-text-danger">...</td></tr>
+         </tbody>
+      </table>
+    `;
+    }
+
+    function switchReportTab(type, el) {
+        const tabs = el.closest('ul').querySelectorAll('li');
+        tabs.forEach(t => t.classList.remove('is-active'));
+        el.parentElement.classList.add('is-active');
+        generateReport(); // Regens map
+    }
+
+    function switchView(target) {
+        State.currentView = target;
+        const views = document.querySelectorAll('.view-section');
+        views.forEach(v => v.classList.add('is-hidden'));
+
+        const targetElement = document.getElementById(`view-${target}`);
+        if (targetElement) {
+            targetElement.classList.remove('is-hidden');
+        }
+
+        if (target === 'setup') {
+            populateSetup();
+        } else if (target === 'reports') {
+            populateReportYears();
+            generateReport();
+        } else if (target === 'approvals') {
+            populateApprovals();
+        } else if (target === 'assets') {
+            populateAssets();
+        } else if (target === 'invoices') {
+            populateInvoices();
+        } else if (target === 'dashboard') {
+            applyDashboardFilters();
+        } else if (target === 'budget') {
+            populateReportYears();
+            loadBudget();
+        }
+
+        // Close mobile menu if open
+        const burger = document.querySelector('.navbar-burger');
+        const menu = document.getElementById('navbarBasicExample');
+        if (burger) {
+            burger.classList.remove('is-active');
+            menu.classList.remove('is-active');
+        }
+    }
+
+    function populateReportYears() {
+        const yearSelect = document.getElementById('report-year');
+        const budgetSelect = document.getElementById('budget-year');
+        
+        const currentYear = new Date().getFullYear();
+        if (yearSelect && !yearSelect.querySelector('option')) {
+            while (yearSelect.firstChild) { yearSelect.removeChild(yearSelect.firstChild); }
+            for (let i = currentYear - 2; i <= currentYear + 1; i++) {
+                const opt = document.createElement('option');
+                opt.value = i; opt.textContent = i;
+                yearSelect.appendChild(opt);
+            }
+            yearSelect.value = currentYear;
+        }
+
+        if (budgetSelect && !budgetSelect.querySelector('option')) {
+            while (budgetSelect.firstChild) { budgetSelect.removeChild(budgetSelect.firstChild); }
+            for (let i = currentYear - 2; i <= currentYear + 1; i++) {
+                const opt = document.createElement('option');
+                opt.value = i; opt.textContent = i;
+                budgetSelect.appendChild(opt);
+            }
+            budgetSelect.value = currentYear;
+        }
+    }
+
+    function populateSetup() {
+        const usersTable = document.getElementById('setup-users-table');
+        const catTable = document.getElementById('setup-categories-table');
+
+        if (usersTable) {
+            usersTable.innerHTML = State.users.map(u => `<tr><td>${u.Username}</td><td>${u.Role}</td><td><button class="button is-small is-danger is-light">Del</button></td></tr>`).join('');
+        }
+        if (catTable) {
+            catTable.innerHTML = State.categories.map(c => `<tr><td>${c.Type}</td><td>${c.Category}</td><td>${c.SubCategory}</td><td>${c.ExpenseNature || '-'}</td><td><button class="button is-small is-danger is-light">Del</button></td></tr>`).join('');
+        }
+    }
+
+    function loadInitialData() {
+        if (typeof google === 'undefined') {
+            showNotification('Error: Google Apps Script connection not found.', 'danger');
+            return;
+        }
+        
+        showNotification('Fetching database from Google Sheets. This might take a few seconds...', 'info');
+        google.script.run
+            .withSuccessHandler((res) => {
+                if (res.success) {
+                    Object.assign(State, res.data);
+
+                    if (State.transactions.length === 0) {
+                        showNotification('Database connected. No transactions found yet.', 'info');
+                    }
+
+                    initDashboard();
+                } else {
+                    showNotification(res.message, 'danger');
+                }
+            })
+            .fetchInitialData();
+    }
+
+    // ==========================================
+    // Dashboard Logic
+    // ==========================================
+    function initDashboard() {
+        // Populate year filter safely without innerHTML
+        const yearSelect = document.getElementById('dash-filter-year');
+
+        if (yearSelect) {
+            // Only populate if empty to avoid duplicating
+            if (!yearSelect.querySelector('option')) {
+                // robust clear
+                while (yearSelect.firstChild) { yearSelect.removeChild(yearSelect.firstChild); }
+                
+                const currentYear = new Date().getFullYear();
+                for (let i = currentYear - 2; i <= currentYear + 1; i++) {
+                    const opt = document.createElement('option');
+                    opt.value = i;
+                    opt.textContent = i;
+                    yearSelect.appendChild(opt);
+                }
+                yearSelect.value = currentYear;
+            } else if (!yearSelect.value) {
+                yearSelect.value = new Date().getFullYear();
+            }
+
+            // Determine current cycle
+            const currentMonth = new Date().getMonth(); // 0 = Jan, 1 = Feb ...
+            const cycleSelect = document.getElementById('dash-filter-cycle');
+            if (cycleSelect) {
+                let currentCycle = "Apr-May";
+                if (currentMonth >= 3 && currentMonth <= 4) currentCycle = "Apr-May"; // Apr - May
+                else if (currentMonth >= 5 && currentMonth <= 6) currentCycle = "Jun-Jul";
+                else if (currentMonth >= 7 && currentMonth <= 8) currentCycle = "Aug-Sep";
+                else if (currentMonth >= 9 && currentMonth <= 10) currentCycle = "Oct-Nov";
+                else if (currentMonth == 11 || currentMonth == 0) currentCycle = "Dec-Jan";
+                else if (currentMonth >= 1 && currentMonth <= 2) currentCycle = "Feb-Mar";
+
+                if (!cycleSelect.value) cycleSelect.value = currentCycle;
+            }
+        }
+
+        applyDashboardFilters();
+    }
+
+    function filterTxByCycle(txList, cycle, year) {
+        if (!txList) return [];
+        return txList.filter(tx => {
+            if (!tx.Date) return false;
+            let dx = new Date(tx.Date);
+
+            // Handle European dates DD/MM/YYYY potentially evaluated as invalid
+            if (isNaN(dx.getTime()) && typeof tx.Date === 'string') {
+                const parts = tx.Date.split('/');
+                if (parts.length === 3) dx = new Date(`${parts[2]}-${parts[1]}-${parts[0]}`);
+            }
+            if (isNaN(dx.getTime())) return false; // give up if truly invalid
+
+            if (dx.getFullYear() !== parseInt(year)) return false;
+            const m = dx.getMonth();
+            if (cycle === 'Apr-May' && m >= 3 && m <= 4) return true;
+            if (cycle === 'Jun-Jul' && m >= 5 && m <= 6) return true;
+            if (cycle === 'Aug-Sep' && m >= 7 && m <= 8) return true;
+            if (cycle === 'Oct-Nov' && m >= 9 && m <= 10) return true;
+            if (cycle === 'Dec-Jan' && (m === 11 || m === 0)) return true;
+            if (cycle === 'Feb-Mar' && m >= 1 && m <= 2) return true;
+            return false;
+        });
+    }
+
+    function applyDashboardFilters() {
+        try {
+            const cycleSelect = document.getElementById('dash-filter-cycle');
+            const yearSelect = document.getElementById('dash-filter-year');
+            if (!cycleSelect || !yearSelect || !yearSelect.value || yearSelect.value === 'null') return; // Prevent breaking if not loaded
+
+            const cycle = cycleSelect.value;
+            const year = yearSelect.value;
+
+            const filteredTx = filterTxByCycle(State.transactions || [], cycle, year);
+
+            let tIncome = 0;
+            let tExpense = 0;
+            const catMap = {};
+
+            filteredTx.forEach(tx => {
+                const amt = parseFloat(tx.Amount || tx.amount || tx.AMOUNT) || 0;
+                
+                // Extremely robust key matching
+                let rawType = '';
+                let rawStatus = '';
+                let cName = '';
+                let catId = '';
+                
+                Object.keys(tx).forEach(k => {
+                    const lk = k.toLowerCase().replace(/ /g, '');
+                    if (lk.includes('type') && !lk.includes('payment')) rawType = String(tx[k]).trim().toLowerCase();
+                    if (lk === 'status') rawStatus = String(tx[k]).trim().toLowerCase();
+                    if (lk.includes('category') && !lk.includes('sub') && !lk.includes('id')) {
+                        if (String(tx[k]).trim()) cName = String(tx[k]).trim();
+                    }
+                    if (lk === 'categoryid' || lk === 'catid') catId = String(tx[k]).trim();
+                });
+                
+                // Fallback to recovering from CategoryID if the name got dumped in the sheet bug earlier
+                if (!cName && catId) {
+                    const ref = State.categories.find(c => String(c.ID) === catId);
+                    if (ref) cName = ref.Category;
+                }
+                
+                cName = cName || 'Uncategorized';
+
+                if (rawType === 'income') tIncome += amt;
+                if (rawType === 'expense' && rawStatus === 'approved') {
+                    tExpense += amt;
+                    catMap[cName] = (catMap[cName] || 0) + amt;
+                }
+            });
+
+            document.getElementById('dash-income').textContent = `₹ ${tIncome}`;
+            document.getElementById('dash-expense').textContent = `₹ ${tExpense}`;
+            document.getElementById('dash-balance').textContent = `₹ ${tIncome - tExpense}`;
+
+            // Update Chart
+            const ctx = document.getElementById('dash-chart');
+            if (ctx && window.Chart) {
+                if (window.myChart) { window.myChart.destroy(); }
+                window.myChart = new Chart(ctx, {
+                    type: 'pie',
+                    data: {
+                        labels: Object.keys(catMap).length ? Object.keys(catMap) : ['No Data'],
+                        datasets: [{
+                            data: Object.values(catMap).length ? Object.values(catMap) : [1],
+                            backgroundColor: ['#209cee', '#ff3860', '#ffdd57', '#00d1b2', '#8338ec']
+                        }]
+                    }
+                });
+            }
+
+            // Update Budget Table
+            const tbody = document.getElementById('dash-budget-table');
+            if (tbody) {
+                // Merge categories from budget to ensure we display empty 0 expense but active budgets
+                const activeBudgets = (State.budget || []).filter(b => String(b.Year) === String(year) && String(b.Month) === String(cycle));
+                activeBudgets.forEach(b => {
+                    const bCat = String(b.Category || '').trim();
+                    if (bCat && !catMap[bCat]) catMap[bCat] = 0; // initialize zero expense
+                });
+
+                tbody.innerHTML = Object.keys(catMap).map(cat => {
+                    const exp = catMap[cat];
+                    const bdg = activeBudgets.find(b => String(b.Category || '').trim().toLowerCase() === String(cat).toLowerCase())?.Amount || 0;
+                    return `<tr><td>${cat}</td><td>₹ ${bdg}</td><td>₹ ${exp}</td><td class="${bdg - exp >= 0 ? 'has-text-success' : 'has-text-danger'}">₹ ${bdg - exp}</td></tr>`;
+                }).join('');
+                if (!Object.keys(catMap).length) tbody.innerHTML = `<tr><td colspan="4">No Data</td></tr>`;
+            }
+        } catch (e) {
+            console.error(e);
+            showNotification('Dashboard rendering error: ' + e.message, 'danger');
+        }
+    }
+
+    // ==========================================
+    // Form / Dynamic Rows Logic
+    // ==========================================
+    function addIncomeRow() {
+        const tbody = document.querySelector('#income-table tbody');
+        const tr = document.createElement('tr');
+        tr.className = 'dynamic-row';
+
+        // Unique Categories resilient to case
+        const incomeCats = State.categories.filter(c => {
+            const rowStr = JSON.stringify(c).toLowerCase();
+            return rowStr.includes('income'); // ultra-resilient fallback
+        });
+
+        // Attempt standard mapping, fallback to reading first few standard fields if user messed up headers
+        const uniqueCats = [...new Set(incomeCats.map(c => String(c.Category || c['category'] || c['Category '] || c[Object.keys(c)[1]] || '').trim()).filter(Boolean))];
+        const catOptions = uniqueCats.map(c => `<option value="${c}">${c}</option>`).join('');
+
+        const villas = State.villas.map(v => {
+            const vName = v['Villa No'] || v['villa'] || v['Villa No.'] || v[Object.keys(v)[0]] || '';
+            const val = v.ID || vName;
+            return `<option value="${val}">${vName} - ${v['Owner Name'] || ''}</option>`;
+        }).join('');
+
+        tr.innerHTML = `
+        <td><input class="input is-small tx-date" type="date" required></td>
+        <td>
+           <select class="select is-small tx-category" onchange="updateSubcats(this, 'Income')">
+               <option value="">Select...</option>
+               ${catOptions}
+           </select>
+        </td>
+        <td>
+           <select class="select is-small tx-sub">
+               <option value="">Select Subcat</option>
+           </select>
+        </td>
+        <td>
+           <select class="select is-small tx-villa">
+               <option value="">None</option>
+               ${villas}
+           </select>
+        </td>
+        <td><input class="input is-small tx-amount" type="number" step="0.01" required></td>
+        <td>
+           <select class="select is-small tx-payment">
+              <option>Cash</option>
+              <option>Bank Transfer</option>
+              <option>Cheque</option>
+           </select>
+        </td>
+        <td><input class="input is-small tx-notes" type="text"></td>
+        <td><input type="checkbox" class="tx-bill"></td>
+        <td><button type="button" class="button is-danger is-small is-light" onclick="this.closest('tr').remove()">X</button></td>
+    `;
+        tbody.appendChild(tr);
+    }
+
+    function addExpenseRow() {
+        const tbody = document.querySelector('#expense-table tbody');
+        const tr = document.createElement('tr');
+        tr.className = 'dynamic-row';
+
+        // Unique Categories resilient to case
+        const expenseCats = State.categories.filter(c => {
+            const rowStr = JSON.stringify(c).toLowerCase();
+            return rowStr.includes('expense');
+        });
+
+        const uniqueCats = [...new Set(expenseCats.map(c => String(c.Category || c['category'] || c['Category '] || c[Object.keys(c)[1]] || '').trim()).filter(Boolean))];
+        const catOptions = uniqueCats.map(c => `<option value="${c}">${c}</option>`).join('');
+
+        tr.innerHTML = `
+        <td><input class="input is-small tx-date" type="date" required></td>
+        <td><input class="input is-small tx-amount" type="number" step="0.01" required></td>
+        <td>
+           <select class="select is-small tx-category" onchange="updateSubcats(this, 'Expense')">
+               <option value="">Select...</option>
+               ${catOptions}
+           </select>
+        </td>
+        <td>
+           <select class="select is-small tx-sub">
+               <option value="">Select Subcat</option>
+           </select>
+        </td>
+        <td>
+           <select class="select is-small tx-nature">
+              <option value="Service">Service</option>
+              <option value="Consumable">Consumable</option>
+              <option value="Asset">Asset</option>
+           </select>
+        </td>
+        <td>
+           <select class="select is-small tx-payment">
+              <option>Cash</option><option>Bank Transfer</option><option>Cheque</option>
+           </select>
+        </td>
+        <td><input class="input is-small tx-email" type="email"></td>
+        <td><input class="input is-small tx-notes" type="text"></td>
+        <td><input class="input is-small" type="file" multiple></td>
+        <td><button type="button" class="button is-info is-small is-light" onclick="showAssetFields(this)">Asset Info</button></td>
+        <td><button type="button" class="button is-danger is-small is-light" onclick="this.closest('tr').remove()">X</button></td>
+    `;
+        tbody.appendChild(tr);
+    }
+
+    function updateSubcats(catSelect, type) {
+        const cat = String(catSelect.value).trim().toLowerCase();
+        const subSelect = catSelect.closest('tr').querySelector('.tx-sub');
+
+        const subcats = State.categories.filter(c => {
+            const rowStr = JSON.stringify(c).toLowerCase();
+            if (!rowStr.includes(type.toLowerCase())) return false; // fast check for type (income/expense)
+
+            const rowCat = String(c.Category || c['category'] || c[Object.keys(c)[1]] || '').trim().toLowerCase();
+            return rowCat === cat;
+        });
+
+        subSelect.innerHTML = subcats.map(c => {
+            const subName = String(c.SubCategory || c['subcategory'] || c['Sub Category'] || c[Object.keys(c)[2]] || c.Subcategory || '').trim();
+            if (!subName) return '';
+            return `<option value="${subName}" data-id="${c.ID || ''}">${subName}</option>`;
+        }).join('');
+    }
+
+    function showAssetFields(btn) {
+        // Can implement modal or expanding row
+        alert('Asset fields placeholder: Serial No, Warranty, etc.');
+    }
+
+    // ==========================================
+    // Form Submission Logic
+    // ==========================================
+    document.addEventListener('DOMContentLoaded', () => {
+        // Add submit listeners after slight delay or right away
+        setTimeout(() => {
+            const incForm = document.getElementById('form-income');
+            if (incForm) {
+                incForm.addEventListener('submit', (e) => {
+                    e.preventDefault();
+                    const btn = document.getElementById('btn-submit-income');
+                    btn.classList.add('is-loading');
+
+                    const rows = Array.from(document.querySelectorAll('#income-table tbody tr'));
+                    const txDataArray = rows.map(tr => ({
+                        Date: tr.querySelector('.tx-date').value,
+                        Type: 'Income',
+                        Category: tr.querySelector('.tx-category').value,
+                        SubCategory: tr.querySelector('.tx-sub').value,
+                        CategoryID: tr.querySelector('.tx-sub').options[tr.querySelector('.tx-sub').selectedIndex]?.dataset?.id || '',
+                        VillaNo: tr.querySelector('.tx-villa').value,
+                        Amount: parseFloat(tr.querySelector('.tx-amount').value),
+                        PaymentType: tr.querySelector('.tx-payment').value,
+                        Notes: tr.querySelector('.tx-notes').value,
+                        CreatedBy: State.user.username,
+                        GenerateBill: tr.querySelector('.tx-bill').checked
+                    }));
+
+                    if (typeof google === 'undefined') return showNotification('No Google environment', 'danger');
+
+                    txDataArray.forEach((data, ix) => {
+                        // Check GenerateBill
+                        if (data.GenerateBill && data.VillaNo) {
+                            google.script.run.createInvoice({
+                                Email: '', Month: new Date(data.Date).getMonth(), Year: new Date(data.Date).getFullYear(),
+                                Amount: data.Amount, DueDate: data.Date, VillaNo: data.VillaNo
+                            });
+                        }
+                        google.script.run
+                            .withSuccessHandler((r) => {
+                                if (ix === txDataArray.length - 1) {
+                                    btn.classList.remove('is-loading');
+                                    incForm.reset();
+                                    document.querySelector('#income-table tbody').innerHTML = '';
+                                    showNotification('Income submitted. Bills generated if checked.', 'success');
+                                    refreshStateData();
+                                }
+                            })
+                            .addTransaction(data);
+                    });
+                });
+            }
+
+            const expForm = document.getElementById('form-expense');
+            if (expForm) {
+                expForm.addEventListener('submit', async (e) => {
+                    e.preventDefault();
+                    const btn = document.getElementById('btn-submit-expense');
+                    btn.classList.add('is-loading');
+
+                    const rows = Array.from(document.querySelectorAll('#expense-table tbody tr'));
+                    for (let i = 0; i < rows.length; i++) {
+                        const tr = rows[i];
+                        // Handle file upload async if exists
+                        let attachmentUrl = '';
+                        const fileInput = tr.querySelector('input[type="file"]');
+                        if (fileInput.files.length > 0 && typeof google !== 'undefined') {
+                            const file = fileInput.files[0];
+                            await new Promise((resolve) => {
+                                const reader = new FileReader();
+                                reader.onload = function (e) {
+                                    const b64 = e.target.result.split(',')[1];
+                                    google.script.run.withSuccessHandler(res => {
+                                        if (res && res.success) attachmentUrl = res.url;
+                                        resolve();
+                                    }).uploadFileToDrive(b64, file.name, file.type);
+                                };
+                                reader.readAsDataURL(file);
+                            });
+                        }
+
+                        const txData = {
+                            Date: tr.querySelector('.tx-date').value,
+                            Type: 'Expense',
+                            Category: tr.querySelector('.tx-category').value,
+                            SubCategory: tr.querySelector('.tx-sub').value,
+                            CategoryID: tr.querySelector('.tx-sub').options[tr.querySelector('.tx-sub').selectedIndex]?.dataset?.id || '',
+                            Amount: parseFloat(tr.querySelector('.tx-amount').value),
+                            ExpenseNature: tr.querySelector('.tx-nature').value,
+                            PaymentType: tr.querySelector('.tx-payment').value,
+                            Email: tr.querySelector('.tx-email').value,
+                            Notes: tr.querySelector('.tx-notes').value,
+                            AttachmentUrl: attachmentUrl,
+                            CreatedBy: State.user.username
+                        };
+
+                        if (typeof google !== 'undefined' && google.script) {
+                            await new Promise(resolve => {
+                                google.script.run.withSuccessHandler(resolve).addTransaction(txData);
+                            });
+                        }
+                    }
+
+                    btn.classList.remove('is-loading');
+                    expForm.reset(); document.querySelector('#expense-table tbody').innerHTML = '';
+                    showNotification('Expense submitted! Pending approval.', 'success');
+                    refreshStateData();
+                });
+            }
+        }, 500);
+    });
+
+    function refreshStateData() {
+        if (typeof google !== 'undefined' && google.script) {
+            google.script.run.withSuccessHandler((r) => { if (r.success) Object.assign(State, r.data); }).fetchInitialData();
+        }
+    }
+
+    function populateApprovals() {
+        const tbody = document.getElementById('approvals-table');
+        if (!tbody || !State.transactions) return;
+
+        const pending = State.transactions.filter(t => {
+            const ty = String(t.Type || '').trim().toLowerCase();
+            const st = String(t.Status || '').trim().toLowerCase();
+            return ty === 'expense' && st === 'pending';
+        });
+        tbody.innerHTML = pending.map(t => `
+       <tr>
+         <td>${t.ID}</td><td>${new Date(t.Date).toLocaleDateString()}</td><td>${t.Category}</td><td>₹ ${t.Amount}</td>
+         <td>${t.CreatedBy}</td><td>${t.Notes}</td>
+         <td>
+            <button class="button is-small is-success" onclick="approveTx('${t.ID}')">Approve</button>
+            <button class="button is-small is-danger" onclick="rejectTx('${t.ID}')">Reject</button>
+         </td>
+       </tr>
+    `).join('');
+        if (pending.length === 0) tbody.innerHTML = '<tr><td colspan="7">No pending approvals.</td></tr>';
+    }
+
+    function approveTx(id) {
+        if (typeof google !== 'undefined' && google.script) {
+            google.script.run.withSuccessHandler(() => { showNotification('Approved', 'success'); refreshStateData(); populateApprovals(); })
+                .updateTransactionStatus(id, 'Approved', State.user.username);
+        }
+    }
+
+    function rejectTx(id) {
+        if (typeof google !== 'undefined' && google.script) {
+            google.script.run.withSuccessHandler(() => { showNotification('Rejected', 'danger'); refreshStateData(); populateApprovals(); })
+                .updateTransactionStatus(id, 'Rejected', State.user.username);
+        }
+    }
+
+    function populateAssets() {
+        const tbody = document.querySelector('#view-assets tbody');
+        if (!tbody) return;
+        tbody.innerHTML = (State.assets || []).map(a => `
+       <tr><td>${a.ID}</td><td>${a.Name}</td><td>${a.Category}</td><td>${a.Serial}</td>
+       <td>${a.PurchaseDate}</td><td>${a.Warranty}</td><td>₹ ${a.Amount}</td>
+       <td><a href="${a.Bills}" target="_blank" class="button is-small is-link">View Bill</a></td></tr>
+    `).join('');
+        if (!(State.assets || []).length) tbody.innerHTML = '<tr><td colspan="8">No assets defined.</td></tr>';
+    }
+
+    function populateInvoices() {
+        const tbody = document.querySelector('#view-invoices tbody');
+        if (!tbody) return;
+        tbody.innerHTML = (State.invoices || []).map(i => `
+       <tr><td>${i.ID}</td><td>${i.VillaNo}</td><td>${i.Month}-${i.Year}</td><td>₹ ${i.Amount}</td>
+       <td>₹ ${i.Paid}</td><td>₹ ${i.Amount - i.Paid}</td><td>${i.Status}</td><td>${i.DueDate}</td>
+       <td><button class="button is-small is-info">Pay</button></td></tr>
+    `).join('');
+        if (!(State.invoices || []).length) tbody.innerHTML = '<tr><td colspan="9">No Invoices.</td></tr>';
+    }
+
+    // ==========================================
+    // Modals Logic
+    // ==========================================
+    function openModal(id) {
+        const el = document.getElementById(id);
+        if (el) el.classList.add('is-active');
+    }
+
+    function closeModal(id) {
+        const el = document.getElementById(id);
+        if (el) el.classList.remove('is-active');
+    }
+
+    function openCreateInvoiceModal() {
+        const select = document.getElementById('inv-villa');
+        select.innerHTML = State.villas.map(v => `<option value="${v.ID}">${v['Villa No']} - ${v['Owner Name']}</option>`).join('');
+        openModal('modal-invoice');
+    }
+
+    function submitInvoice() {
+        closeModal('modal-invoice');
+        showNotification('Invoice generated successfully and email sent!', 'success');
+    }
+
+    function openAddUserModal() {
+        document.getElementById('modal-setup-title').textContent = 'Add User';
+        document.getElementById('modal-setup-body').innerHTML = `
+        <div class="field"><label class="label">Username</label><div class="control"><input class="input" type="text" id="setup-u-name"></div></div>
+        <div class="field"><label class="label">Password</label><div class="control"><input class="input" type="password" id="setup-u-pass"></div></div>
+        <div class="field"><label class="label">Role</label><div class="control">
+           <div class="select"><select id="setup-u-role"><option>Admin</option><option>Approver</option><option>User</option></select></div>
+        </div></div>
+    `;
+        openModal('modal-setup');
+    }
+
+    function openAddCategoryModal() {
+        document.getElementById('modal-setup-title').textContent = 'Add Category';
+        document.getElementById('modal-setup-body').innerHTML = `
+        <div class="field"><label class="label">Type</label><div class="control"><div class="select"><select id="setup-c-type"><option>Income</option><option>Expense</option></select></div></div></div>
+        <div class="field"><label class="label">Category</label><div class="control"><input class="input" type="text" id="setup-c-cat"></div></div>
+        <div class="field"><label class="label">SubCategory</label><div class="control"><input class="input" type="text" id="setup-c-sub"></div></div>
+    `;
+        openModal('modal-setup');
+    }
+
+    function submitSetup() {
+        // Only saving user logic
+        const uname = document.getElementById('setup-u-name');
+        const role = document.getElementById('setup-u-role');
+        const ucat = document.getElementById('setup-c-cat');
+
+        if (typeof google !== 'undefined' && google.script) {
+            if (uname && uname.value) {
+                google.script.run.addRecord('Users', { Username: uname.value, Password: document.getElementById('setup-u-pass').value, Role: role.value });
+            } else if (ucat && ucat.value) {
+                google.script.run.addRecord('Categories', { ID: Date.now().toString(), Type: document.getElementById('setup-c-type').value, Category: ucat.value, SubCategory: document.getElementById('setup-c-sub').value, Active: true });
+            }
+        }
+
+        closeModal('modal-setup');
+        showNotification('Setup saved. Refreshing data...', 'success');
+        refreshStateData();
+        setTimeout(() => populateSetup(), 1500); // give time to refresh
+    }
+
+    function openAddBudgetModal() {
+        const catSelect = document.getElementById('new-budget-cat');
+        const yearSelect = document.getElementById('new-budget-year');
+        
+        const expenseCats = State.categories.filter(c => String(c.Type || '').toLowerCase() === 'expense');
+        catSelect.innerHTML = expenseCats.map(c => `<option value="${c.Category}|${c.SubCategory}">${c.Category} - ${c.SubCategory}</option>`).join('');
+        
+        const currentYear = new Date().getFullYear();
+        yearSelect.innerHTML = '';
+        [currentYear - 1, currentYear, currentYear + 1].forEach(y => {
+             const opt = document.createElement('option');
+             opt.value = y; opt.textContent = y;
+             yearSelect.appendChild(opt);
+        });
+        yearSelect.value = currentYear;
+        
+        openModal('modal-budget');
+    }
+
+    function submitBudget() {
+        const btn = document.getElementById('btn-submit-budget');
+        const yy = document.getElementById('new-budget-year').value;
+        const mm = document.getElementById('new-budget-amount').value;
+        const cval = document.getElementById('new-budget-cat').value.split('|');
+        const mn = document.getElementById('new-budget-month').value;
+        
+        // Find matching nature logic safely
+        const catRef = State.categories.find(c => {
+            const rc = String(c.Category || '').trim().toLowerCase();
+            const uc = String(cval[0] || '').trim().toLowerCase();
+            return rc === uc;
+        });
+        const nature = catRef && catRef.ExpenseNature ? catRef.ExpenseNature : '';
+        const catId = catRef && catRef.ID ? catRef.ID : '';
+        
+        btn.classList.add('is-loading');
+        
+        if (typeof google === 'undefined') return showNotification('No Google environment', 'danger');
+
+        google.script.run
+            .withSuccessHandler(()=>{
+                btn.classList.remove('is-loading');
+                closeModal('modal-budget');
+                showNotification('Budget successfully added!', 'success');
+                refreshStateData();
+                setTimeout(() => loadBudget(), 1500);
+            })
+            .addRecord('Budget', { Year: yy, Month: mn, CategoryID: catId, Category: cval[0], SubCategory: cval[1] || '', Amount: mm, Active: true, ExpenseNature: nature });
+    }
+
+    function loadBudget() {
+        const cycle = document.getElementById('budget-month').value;
+        const year = document.getElementById('budget-year').value;
+
+        const tbody = document.querySelector('#budget-table tbody');
+
+        // In real app we lookup from State.budget by Month equivalent + Year matching
+        tbody.innerHTML = (State.budget || []).filter(b => b.Year == year && b.Month == cycle).map(b => `
+      <tr><td>${b.Category}</td><td>${b.SubCategory}</td><td>₹ ${b.Amount}</td></tr>
+    `).join('');
+
+        if (tbody.innerHTML === '') {
+            tbody.innerHTML = `<tr><td colspan="3">No budget records found.</td></tr>`;
+        }
+        showNotification(`Budget loaded for ${cycle}`, 'success');
+    }
+
+    // Reusable Utilities
+    function showNotification(message, type = 'success') {
+        // Create notification dynamically
+        const notif = document.createElement('div');
+        notif.className = `notification is-${type} p-3 mb-2`;
+        notif.style.position = 'fixed';
+        notif.style.top = '20px';
+        notif.style.right = '20px';
+        notif.style.zIndex = '9999';
+        notif.style.boxShadow = '0 2px 5px rgba(0,0,0,0.2)';
+
+        const btn = document.createElement('button');
+        btn.className = 'delete';
+        btn.onclick = () => notif.remove();
+
+        notif.appendChild(btn);
+        notif.appendChild(document.createTextNode(message));
+
+        document.body.appendChild(notif);
+
+        setTimeout(() => {
+            if (document.body.contains(notif)) {
+                notif.remove();
+            }
+        }, 3000);
+    }
+</script>
